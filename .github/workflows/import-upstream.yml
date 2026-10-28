@@ -1,0 +1,47 @@
+name: Import CleanYourTV launcher into TVLite
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/import-upstream.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout TVLite
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Checkout upstream
+        uses: actions/checkout@v4
+        with:
+          repository: Gathin23/cleanyourtv
+          path: upstream
+      - name: Replace launcher source and retain licenses
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf app gradle
+          cp -a upstream/launcher/app ./app
+          cp upstream/launcher/build.gradle ./build.gradle
+          cp upstream/launcher/settings.gradle ./settings.gradle
+          cp upstream/launcher/gradle.properties ./gradle.properties
+          cp upstream/LICENSE ./LICENSE
+          cp upstream/launcher/FONT-LICENSE-OFL.txt ./FONT-LICENSE-OFL.txt
+          sed -i 's/rootProject.name = "tvhome"/rootProject.name = "AppleTVLite"/' settings.gradle
+          # Keep the upstream package identity for compatibility; change only the user-facing app name.
+          if grep -RIl 'CleanYourTV\|TV Home' app/src/main/res/values/strings.xml >/dev/null 2>&1; then
+            sed -i 's/CleanYourTV/Apple TV Lite/g; s/TV Home/Apple TV Lite/g' app/src/main/res/values/strings.xml
+          fi
+          rm -rf upstream
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Import CleanYourTV native launcher (MIT) as TVLite base'
+          git push origin HEAD:main
